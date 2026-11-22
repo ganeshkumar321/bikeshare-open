@@ -104,3 +104,66 @@ Claude removed `+ ["casual"]` from `feature_columns()` and ran `make test`. The 
 ................                                                         [100%]
 16 passed in 1.66s
 ```
+
+## Fault 2 — Removed the shift from `cnt_roll_7`
+
+### Exact change
+
+```diff
+diff --git a/src/features.py b/src/features.py
+index 76e492d..a6385db 100644
+--- a/src/features.py
++++ b/src/features.py
+@@ -73,7 +73,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
+     # If you add a longer lag, raise LAG_WARMUP in src/config.py.
+     out["cnt_lag_1"] = out[TARGET].shift(1)
+     out["cnt_lag_7"] = out[TARGET].shift(LAG_WARMUP)
+-    out["cnt_roll_7"] = out[TARGET].shift(1).rolling(LAG_WARMUP).mean()
++    out["cnt_roll_7"] = out[TARGET].rolling(LAG_WARMUP).mean()
+     out["cnt_roll_3"] = out[TARGET].shift(1).rolling(ROLL_SHORT).mean()
+ 
+     return out.dropna().reset_index(drop=True)
+```
+
+### PostToolUse hook stderr (excerpt)
+
+Claude Code clipped the displayed hook output. These lines were visible in the original hook result.
+
+```text
+E             comparison failed
+E             Obtaine
+E             Expected: 4414.857142857143 ± 0.00441486
+
+tests/test_leakage.py:57: AssertionError
+============================================
+FAILED tests/test_lea_excludes_today -ass...
+1 failed, 7 passed in
+```
+
+### Failing test output
+
+```text
+$ python -m pytest tests/test_leakage.py -k test_rolling_mean_excludes_today -q --tb=short
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________________ test_rolling_mean_excludes_today _______________________
+tests/test_leakage.py:57: in test_rolling_mean_excludes_today
+    assert feats.set_index("dteday").cnt_roll_7[date] == pytest.approx(expected)
+E   assert np.float64(4389.0) == 4414.857142857143 ± 0.00441486
+E     
+E     comparison failed
+E     Obtained: 4389.0
+E     Expected: 4414.857142857143 ± 0.00441486
+=========================== short test summary info ============================
+FAILED tests/test_leakage.py::test_rolling_mean_excludes_today - assert np.fl...
+1 failed, 7 deselected in 0.78s
+```
+
+### Repair and turn count
+
+Claude restored `.shift(1)` before `.rolling(LAG_WARMUP)` in `cnt_roll_7` and ran `make test`. The repair took **1 turn** after I requested it, with one edit and one verification command.
+
+```text
+................                                                         [100%]
+16 passed in 1.64s
+```
