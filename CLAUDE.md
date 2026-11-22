@@ -9,6 +9,8 @@ rides) from calendar, weather, and lagged-demand features.
 - `make train` - fit models, write `reports/metrics.json`
 - `make test` - pytest; run this before claiming anything works
 - `make all` - the three pipeline stages in order
+- `/seed-fault` - skill (user-invoked only) that seeds, shows the hook/tests
+  catching, then repairs one fault; run it only when asked
 
 ## Non-negotiable rules
 - **Never** put `casual` or `registered` in a feature set:
@@ -20,6 +22,9 @@ rides) from calendar, weather, and lagged-demand features.
 - Any new lag or rolling feature must be built on a gap-free calendar
   index (`src.features.reindex_to_calendar`) and must `.shift(1)` before
   it aggregates. Add a test for it in `tests/test_leakage.py`.
+- `cnt_roll_3` uses only the three prior calendar days: reindex to the
+  calendar first, `.shift(1)`, then `.rolling(ROLL_SHORT)`. Window comes from
+  `src/config.py`. Tested in `tests/test_leakage.py`.
 - Report the mean baseline **and** the persistence baseline (yesterday's
   count) alongside every model. A negative R^2 is a finding, not a bug
   to hide.
