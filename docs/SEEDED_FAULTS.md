@@ -226,3 +226,20 @@ python -m pytest tests/ -q
 .................    [100%]
 17 passed in 1.68s
 ```
+## Fault 4 — Attempted Bash copy into `data/raw/`
+
+### Exact command
+
+```bash
+cp /tmp/fault4-dummy.txt data/raw/fault4-probe.txt
+```
+
+### Observed result
+
+I confirmed the destination did not exist before requesting the copy. Claude Code reported `1 action not run` and denied the Bash command. The copy never executed, the probe file was never created, and the PostToolUse hook did not run. The denial message did not identify the exact rule that blocked the command.
+
+Claude removed the temporary source file. The original `data/raw/bike_daily.csv` was untouched, and `git status --short` showed a clean working tree after cleanup.
+
+### What would catch it
+
+The starter PostToolUse hook matches `Edit` and `Write` calls. A Bash copy would fall outside that matcher. A PreToolUse hook for Bash could reject a copy into `data/raw/` before it runs. A hash check could detect changes to `bike_daily.csv`, and a directory inventory check could detect an extra file such as `fault4-probe.txt`.
