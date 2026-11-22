@@ -45,6 +45,16 @@ UNVERIFIED_COLS = {"cnt_2d_bfr"}
 # What feature_columns() and the tests actually enforce.
 FORBIDDEN = LEAKAGE_COLS | TIME_INDEX_COLS | UNVERIFIED_COLS
 
+# Raw columns approved as model inputs (calendar and same-day weather, all
+# known at prediction time). Declared by hand, NOT derived from the CSV, so a
+# new raw column cannot approve itself: adding one means editing this set on
+# purpose. tests/test_contract.py checks the raw header against
+# FORBIDDEN | APPROVED_RAW_FEATURES | {"dteday"}.
+APPROVED_RAW_FEATURES = {
+    "season", "mnth", "holiday", "weekday", "workday", "weather",
+    "temp", "atemp", "hum", "windspeed",
+}
+
 # Temporal split: train on 2011, validate on H1 2012, test on H2 2012.
 TRAIN_END = "2011-12-31"
 VALID_END = "2012-06-30"

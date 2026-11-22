@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 from sklearn.metrics import r2_score
 
-from src.config import LAG_WARMUP, TARGET
+from src.config import APPROVED_RAW_FEATURES, FORBIDDEN, LAG_WARMUP, RAW, TARGET
 from src.features import build_features, feature_columns, reindex_to_calendar
 from src.ingest import load_raw
 from src.train import MODELS, temporal_split
@@ -17,6 +17,17 @@ def raw():
 @pytest.fixture(scope="module")
 def feats(raw):
     return build_features(raw)
+
+
+def test_raw_columns_are_all_accounted_for():
+    """Every column in the raw CSV must be FORBIDDEN, an approved feature, or
+    dteday. The allowed set comes from src/config.py, never from the CSV, so
+    an unexpected new column (say a second leaky restatement of cnt) fails
+    here instead of approving itself."""
+    header = set(pd.read_csv(RAW, nrows=0).columns)
+    allowed = FORBIDDEN | APPROVED_RAW_FEATURES | {"dteday"}
+    unexpected = header - allowed
+    assert not unexpected, f"raw columns not classified in src/config.py: {sorted(unexpected)}"
 
 
 def test_calendar_is_complete_before_lagging(raw):
