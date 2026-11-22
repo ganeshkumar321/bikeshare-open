@@ -167,3 +167,62 @@ Claude restored `.shift(1)` before `.rolling(LAG_WARMUP)` in `cnt_roll_7` and ra
 ................                                                         [100%]
 16 passed in 1.64s
 ```
+
+## Fault 3 — Removed rejection of unknown weather labels
+
+### Exact change
+
+```diff
+diff --git a/src/features.py b/src/features.py
+index 76e492d..b401f5a 100644
+--- a/src/features.py
++++ b/src/features.py
+@@ -26,8 +26,6 @@ def encode_weather(series: pd.Series) -> pd.Series:
+     """
+     known = series.dropna()
+     unknown = set(known.unique()) - set(WEATHER_ORDER)
+-    if unknown:
+-        raise ValueError(f"unmapped weather labels: {sorted(unknown)}")
+     return series.map(WEATHER_ORDER).astype(float)
+ 
+ 
+```
+
+### PostToolUse hook stderr
+
+Claude reported that the hook produced no stderr when the fault was originally seeded. The existing tests passed with the fault in place.
+
+```text
+$ make test
+python -m pytest tests/ -q
+................                                                         [100%]
+16 passed in 2.15s
+```
+
+### Failing test output
+
+I added a regression test that passes `["GOOD", "MISTY", "STORMY"]` to `encode_weather()` and expects a `ValueError`. The removed check allowed `STORMY` to map to `NaN`, which could cause the feature builder to silently drop the row.
+
+```text
+$ python -m pytest tests/test_leakage.py -k test_encode_weather_rejects_unknown_label -q --tb=short
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________________ test_encode_weather_rejects_unknown_label ___________________
+tests/test_leakage.py:74: in test_encode_weather_rejects_unknown_label
+    with pytest.raises(ValueError, match="unmapped weather labels"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+=========================== short test summary info ============================
+FAILED tests/test_leakage.py::test_encode_weather_rejects_unknown_label - Fai...
+1 failed, 8 deselected in 1.15s
+```
+
+### Repair and turn count
+
+Claude restored the `if unknown` block and its `ValueError`, kept the regression test, and ran `make test`. The repair took **1 turn** after I requested it.
+
+```text
+python -m pytest tests/ -q
+.................    [100%]
+17 passed in 1.68s
+```

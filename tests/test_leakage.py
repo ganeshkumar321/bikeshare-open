@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from src.config import FORBIDDEN, TARGET
-from src.features import build_features, feature_columns
+from src.features import build_features, encode_weather, feature_columns
 from src.ingest import load_raw
 
 
@@ -66,6 +66,13 @@ def test_roll_3_is_mean_of_previous_three_days(feats):
     assert [by_date.loc[d, TARGET] for d in prior] == [4972, 7421, 7363]
     expected = (4972 + 7421 + 7363) / 3  # 6585.333...
     assert by_date.loc[date, "cnt_roll_3"] == pytest.approx(expected)
+
+
+def test_encode_weather_rejects_unknown_label():
+    """An unseen weather label must raise, not become a silent NaN that
+    dropna() later deletes along with the row."""
+    with pytest.raises(ValueError, match="unmapped weather labels"):
+        encode_weather(pd.Series(["GOOD", "MISTY", "STORMY"]))
 
 
 def test_no_missing_values(feats):
