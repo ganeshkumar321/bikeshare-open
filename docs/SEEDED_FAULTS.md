@@ -2,9 +2,9 @@
 
 ```text
 $ python -m pytest tests/test_leakage.py -k roll_3 -q --tb=short
-F                                                                        [100%]
-=================================== FAILURES ===================================
-__________________ test_roll_3_is_mean_of_previous_three_days __________________
+F                                                               [100%]
+============================== FAILURES ===============================
+_____________ test_roll_3_is_mean_of_previous_three_days ______________
 .venv/lib/python3.14/site-packages/pandas/core/indexes/base.py:3641: in get_loc
     return self._engine.get_loc(casted_key)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -34,7 +34,73 @@ tests/test_leakage.py:68: in test_roll_3_is_mean_of_previous_three_days
 .venv/lib/python3.14/site-packages/pandas/core/indexes/base.py:3648: in get_loc
     raise KeyError(key) from err
 E   KeyError: 'cnt_roll_3'
+======================= short test summary info =======================
+FAILED tests/test_leakage.py::test_roll_3_is_mean_of_previous_three_days - KeyError: 'cnt_roll_3'
+1 failed, 7 deselected in 1.15s
+```
+
+## Fault 1 — Forbidden column in `feature_columns`
+
+### Exact change
+
+```diff
+--- /tmp/seed-fault-features.py.orig    2026-11-21 19:22:32
++++ src/features.py     2026-11-21 19:22:32
+@@ -82,7 +82,7 @@
+ def feature_columns(df: pd.DataFrame) -> list[str]:
+     """Numeric columns that are safe to feed the model."""
+     numeric = df.select_dtypes(include="number").columns
+-    return [c for c in numeric if c not in FORBIDDEN]
++    return [c for c in numeric if c not in FORBIDDEN] + ["casual"]
+```
+
+### PostToolUse hook stderr
+
+```text
+Leakage tests failed after editing /Users/ganesh/Downloads/bikeshare-open-starter/src/features.py:
+feats =         dteday  instant  season  ...  cnt_lag_7   cnt_roll_7   cnt_roll_3
+0   2011-01-10     10.0  WINTER  ...     134....142857  2183.333333
+713 2012-12-31    731.0  WINTER  ...      920.0  1531.428571  2077.333333
+
+[714 rows x 29 columns]
+
+    def test_no_forbidden_features(feats):
+        """Guards the gate, not the data: feature_columns() excludes FORBIDDEN by
+        construction, so this cannot discover a *new* leaky column. What it
+        catches is someone editing feature_columns() or FORBIDDEN -- which is
+        exactly the fault the Step 7 hook demonstrates."""
+        cols = set(feature_columns(feats))
+>       assert not (cols & FORBIDDEN), f"forbidden columns in feature set: {cols & FORBIDDEN}"
+E       AssertionError: forbidden columns in feature set: {'casual'}
+E       assert not ({'atemp', 'casual', 'cnt_lag_1', 'cnt_lag_7', 'cnt_roll_3', 'cnt_roll_7', ...} & {'casual', 'cnt', 'cnt_2d_bfr', 'days_since_2011', 'instant', 'registered', ...})
+
+tests/test_leakage.py:31: AssertionError
+======================= short test summary info =======================
+FAILED tests/test_leakage.py::test_no_forbidden_features - Assertion...
+1 failed, 7 passed in 0.84s
+```
+
+### Failing test output
+
+```text
+$ python -m pytest tests/test_leakage.py -k test_no_forbidden_features -q --tb=short
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________________________ test_no_forbidden_features __________________________
+tests/test_leakage.py:31: in test_no_forbidden_features
+    assert not (cols & FORBIDDEN), f"forbidden columns in feature set: {cols & FORBIDDEN}"
+E   AssertionError: forbidden columns in feature set: {'casual'}
+E   assert not ({'atemp', 'casual', 'cnt_lag_1', 'cnt_lag_7', 'cnt_roll_3', 'cnt_roll_7', ...} & {'casual', 'cnt', 'cnt_2d_bfr', 'days_since_2011', 'instant', 'registered', ...})
 =========================== short test summary info ============================
-FAILED tests/test_leakage.py::test_roll_3_is_mean_of_previous_three_days - Ke...
-1 failed, 7 deselected in 1.05s
+FAILED tests/test_leakage.py::test_no_forbidden_features - AssertionError: fo...
+1 failed, 7 deselected in 0.78s
+```
+
+### Repair and turn count
+
+Claude removed `+ ["casual"]` from `feature_columns()` and ran `make test`. The repair took **1 turn** after I requested it, with one edit and one verification command.
+
+```text
+................                                                         [100%]
+16 passed in 1.66s
 ```
